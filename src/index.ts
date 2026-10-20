@@ -1,3 +1,15 @@
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+
+function isValidFilename(filename: string): boolean {
+	return (
+		filename.length > 0 &&
+		filename.length <= 255 &&
+		/^[a-zA-Z0-9._-]+$/.test(filename) &&
+		filename !== "." &&
+		filename !== ".."
+	);
+}
+
 export default {
 	async fetch(request, env): Promise<Response> {
 		const url = new URL(request.url);
@@ -28,47 +40,149 @@ export default {
 			});
 		}
 
+		// Create a project in D1
+		if (url.pathname === "/projects" && request.method === "POST") {
+			let body: {
+				name: string;
+				description?: string;
+				user_id: number;
+			};
 
-               // Create a project
-               if (url.pathname === "/projects" && request.method === "POST") {
-	              const body = await request.json<{
-		name: string;
-		description?: string;
-		user_id: number;
-	}>();
+			try {
+				body = await request.json();
+			} catch {
+				return Response.json(
+					{ error: "Invalid JSON body" },
+					{ status: 400 },
+				);
+			}
 
-	const result = await env.DB
-		.prepare(
-			"INSERT INTO projects (name, description, user_id) VALUES (?, ?, ?)",
-		)
-		.bind(
-			body.name,
-			body.description ?? null,
-			body.user_id,
-		)
-		.run();
+			if (
+				typeof body.name !== "string" ||
+				body.name.trim().length === 0 ||
+				!Number.isInteger(body.user_id)
+			) {
+				return Response.json(
+					{ error: "A project name and integer user_id are required" },
+					{ status: 400 },
+				);
+			}
 
-	return Response.json(
-		{
-			message: "Project created successfully",
-			project: {
-				id: result.meta.last_row_id,
-				name: body.name,
-				description: body.description ?? null,
-				user_id: body.user_id,
-			},
-		},
-		{ status: 201 },
-	);
-}
+			const result = await env.DB
+				.prepare(
+					"INSERT INTO projects (name, description, user_id) VALUES (?, ?, ?)",
+				)
+				.bind(
+					body.name.trim(),
+					body.description ?? null,
+					body.user_id,
+				)
+				.run();
 
+			return Response.json(
+				{
+					message: "Project created successfully",
+					project: {
+						id: result.meta.last_row_id,
+						name: body.name.trim(),
+						description: body.description ?? null,
+						user_id: body.user_id,
+					},
+				},
+				{ status: 201 },
+			);
+		}
 
+		// Upload a file to private R2 storage
+		if (url.pathname === "/files" && request.method === "POST") {
+			const filename = url.searchParams.get("filename");
+
+			if (!filename || !isValidFilename(filename)) {
+				return Response.json(
+					{
+						error:
+							"Provide a valid filename using letters, numbers, dots, underscores, or hyphens",
+					},
+					{ status: 400 },
+				);
+			}
+
+			const contentLength = Number(request.headers.get("content-length"));
+
+			if (
+				request.headers.has("content-length") &&
+				(!Number.isFinite(contentLength) ||
+					contentLength < 0 ||
+					contentLength > MAX_FILE_SIZE)
+			) {
+				return Response.json(
+					{ error: "File size must not exceed 5 MB" },
+					{ status: 413 },
+				);
+			}
+
+			const contentType =
+				request.headers.get("content-type") ??
+				"application/octet-stream";
+
+			const object = await env.cloudflare_saas_files.put(
+				filename,
+				request.body,
+				{
+					httpMetadata: {
+						contentType,
+					},
+				},
+			);
+
+			return Response.json(
+				{
+					message: "File uploaded successfully",
+					file: {
+						filename,
+						size: object.size,
+					},
+				},
+				{ status: 201 },
+			);
+		}
+
+		// Download a file from private R2 storage
+		if (
+			url.pathname.startsWith("/files/") &&
+			request.method === "GET"
+		) {
+			const filename = decodeURIComponent(
+				url.pathname.slice("/files/".length),
+			);
+
+			if (!isValidFilename(filename)) {
+				return Response.json(
+					{ error: "Invalid filename" },
+					{ status: 400 },
+				);
+			}
+
+			const object = await env.cloudflare_saas_files.get(filename);
+
+			if (!object) {
+				return Response.json(
+					{ error: "File not found" },
+					{ status: 404 },
+				);
+			}
+
+			const headers = new Headers();
+			object.writeHttpMetadata(headers);
+			headers.set("etag", object.httpEtag);
+			headers.set("content-disposition", "attachment");
+
+			return new Response(object.body, { headers });
+		}
 
 		// Route not found
 		return Response.json(
-			{
-				error: "Route not found",
-			},
+			{ error: "Route not found" },
 			{ status: 404 },
 		);
 	},

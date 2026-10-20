@@ -1,4 +1,3 @@
-
 /**
  * For more details on how to configure Wrangler, refer to:
  * https://developers.cloudflare.com/workers/wrangler/configuration/
@@ -17,7 +16,13 @@
 			"binding": "DB",
 			"database_name": "cloudflare-saas-db",
 			"database_id": "f3898b39-8829-4ba9-8e35-7152fce5fd5c",
-		
+		}
+	],
+	"r2_buckets": [
+		{
+			"bucket_name": "cloudflare-saas-files",
+			"binding": "cloudflare_saas_files",
+			"remote": true
 		}
 	],
 	/**
@@ -49,4 +54,3 @@
 	 */
 	// "services": [  {   "binding": "MY_SERVICE",   "service": "my-service"  } ]
 }
-
