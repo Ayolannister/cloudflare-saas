@@ -94,59 +94,115 @@ export default {
 		}
 
 		// Upload a file to private R2 storage
-		if (url.pathname === "/files" && request.method === "POST") {
-			const filename = url.searchParams.get("filename");
+if (url.pathname === "/files" && request.method === "POST") {
+	const filename = url.searchParams.get("filename");
 
-			if (!filename || !isValidFilename(filename)) {
-				return Response.json(
-					{
-						error:
-							"Provide a valid filename using letters, numbers, dots, underscores, or hyphens",
-					},
-					{ status: 400 },
-				);
+	if (!filename || !isValidFilename(filename)) {
+		return Response.json(
+			{
+				error:
+					"Provide a valid filename using letters, numbers, dots, underscores, or hyphens",
+			},
+			{ status: 400 },
+		);
+	}
+
+	if (!request.body) {
+		return Response.json(
+			{ error: "A file body is required" },
+			{ status: 400 },
+		);
+	}
+
+	const contentLengthHeader = request.headers.get("content-length");
+
+	if (contentLengthHeader !== null) {
+		const contentLength = Number(contentLengthHeader);
+
+		if (
+			!Number.isSafeInteger(contentLength) ||
+			contentLength < 0
+		) {
+			return Response.json(
+				{ error: "Invalid Content-Length header" },
+				{ status: 400 },
+			);
+		}
+
+		if (contentLength > MAX_FILE_SIZE) {
+			return Response.json(
+				{ error: "File size must not exceed 5 MB" },
+				{ status: 413 },
+			);
+		}
+	}
+
+	// Enforce the size limit while reading the body.
+	const reader = request.body.getReader();
+	const chunks: Uint8Array[] = [];
+	let totalSize = 0;
+
+	try {
+		while (true) {
+			const { done, value } = await reader.read();
+
+			if (done) {
+				break;
 			}
 
-			const contentLength = Number(request.headers.get("content-length"));
+			totalSize += value.byteLength;
 
-			if (
-				request.headers.has("content-length") &&
-				(!Number.isFinite(contentLength) ||
-					contentLength < 0 ||
-					contentLength > MAX_FILE_SIZE)
-			) {
+			if (totalSize > MAX_FILE_SIZE) {
+				await reader.cancel();
+
 				return Response.json(
 					{ error: "File size must not exceed 5 MB" },
 					{ status: 413 },
 				);
 			}
 
-			const contentType =
-				request.headers.get("content-type") ??
-				"application/octet-stream";
-
-			const object = await env.cloudflare_saas_files.put(
-				filename,
-				request.body,
-				{
-					httpMetadata: {
-						contentType,
-					},
-				},
-			);
-
-			return Response.json(
-				{
-					message: "File uploaded successfully",
-					file: {
-						filename,
-						size: object.size,
-					},
-				},
-				{ status: 201 },
-			);
+			chunks.push(value);
 		}
+	} catch {
+		return Response.json(
+			{ error: "Unable to read uploaded file" },
+			{ status: 400 },
+		);
+	}
 
+	const fileBytes = new Uint8Array(totalSize);
+	let offset = 0;
+
+	for (const chunk of chunks) {
+		fileBytes.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+
+	const contentType =
+		request.headers.get("content-type") ??
+		"application/octet-stream";
+
+	const object = await env.cloudflare_saas_files.put(
+		filename,
+		fileBytes,
+		{
+			httpMetadata: {
+				contentType,
+			},
+		},
+	);
+
+	return Response.json(
+		{
+			message: "File uploaded successfully",
+			file: {
+				filename,
+				size: object.size,
+			},
+		},
+		{ status: 201 },
+	);
+}
 		// Download a file from private R2 storage
 		if (
 			url.pathname.startsWith("/files/") &&
