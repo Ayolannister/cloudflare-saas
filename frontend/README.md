@@ -1,75 +1,74 @@
-# React + TypeScript + Vite
+# Cloudbase frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React app for the Cloudbase Worker API: projects, tasks, and private files you can attach to tasks.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Vite, React 19, TypeScript
+- Tailwind CSS v4 (tokens in `src/index.css`, no component kit)
+- TanStack Query for server data, Zustand for toasts and saved preferences
+- React Router
+- Clerk for sign-in (the Worker verifies the session token on every request)
+- Schibsted Grotesk, self-hosted through Fontsource
 
-## React Compiler
+## Run it locally
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+1. Start the API from the repo root:
 
-## Expanding the ESLint configuration
+   ```
+   npx wrangler dev
+   ```
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+2. In a second terminal, go to the frontend:
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+   ```
+   cd frontend
+   ```
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+3. Install dependencies:
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+   ```
+   npm install
+   ```
+
+4. Create your env file:
+
+   ```
+   cp .env.example .env
+   ```
+
+5. Put your Clerk publishable key in `.env` as `VITE_CLERK_PUBLISHABLE_KEY`.
+
+6. Start the dev server:
+
+   ```
+   npm run dev
+   ```
+
+7. Open http://localhost:5173.
+
+## Checks
 
 ```
+npm run lint
+npm run build
+```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+## Deploying to Cloudflare Pages
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+1. Set the build command to `npm run build` and the output folder to `dist`, with `frontend` as the root directory.
+2. Add `VITE_CLERK_PUBLISHABLE_KEY` and `VITE_API_BASE_URL` (your Worker URL) as Pages environment variables.
+3. Set `FRONTEND_ORIGIN` in the root `wrangler.jsonc` to your Pages URL, then redeploy the Worker so CORS allows it.
+4. `public/_headers` adds security headers and long caching for hashed assets.
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## Layout
 
+```
+src/
+  app/          router and providers (query client, cache reset on sign-out)
+  components/   brand, icons, toasts, confirm button, status blocks
+  features/     projects, tasks and files UI pieces
+  lib/          API client, typed queries and mutations, formatting
+  pages/        landing, project, files, not found
+  stores/       Zustand stores
 ```

@@ -1,44 +1,125 @@
-:root {
-  font-family:
-    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
-    "Segoe UI", sans-serif;
-  color: #252a3e;
-  background: #ffffff;
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+@import 'tailwindcss';
 
-  font-optical-sizing: auto;
-  font-weight: 400;
+@theme {
+  --font-sans: 'Schibsted Grotesk Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+
+  --color-ground: #edefea;
+  --color-surface: #ffffff;
+  --color-field: #f5f6f3;
+  --color-ink: #1f2a24;
+  --color-muted: #56615a;
+  --color-rule: #d3d9d2;
+  --color-mark: #e9b42a;
+  --color-on-mark: #1f2a24;
+  --color-mark-line: #e9b42a;
+  --color-danger: #b3361f;
+  --color-danger-soft: #f7e3de;
+  --color-danger-ink: #8a2614;
 }
 
-* {
-  box-sizing: border-box;
+/* Dark mode keeps body text above 12:1 and muted text above 7:1 against surfaces. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-ground: #101512;
+    --color-surface: #182019;
+    --color-field: #1f2820;
+    --color-ink: #eef2ec;
+    --color-muted: #b1bbb3;
+    --color-rule: #34403a;
+    --color-mark-line: #7d5f0e;
+    --color-danger: #c4442b;
+    --color-danger-soft: #3a1a13;
+    --color-danger-ink: #f5b3a4;
+    color-scheme: dark;
+  }
 }
 
-html {
-  min-width: 320px;
-  min-height: 100%;
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    @apply bg-ground font-sans text-ink;
+    min-width: 320px;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background: var(--color-mark);
+    color: var(--color-on-mark);
+  }
 }
 
-body {
-  min-width: 320px;
-  min-height: 100vh;
-  margin: 0;
+@layer components {
+  .btn {
+    @apply inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-lg px-3.5 text-sm font-semibold whitespace-nowrap select-none disabled:cursor-not-allowed disabled:opacity-50;
+    transition: background-color 120ms ease, color 120ms ease;
+  }
+
+  .btn-primary {
+    @apply bg-ink text-surface hover:opacity-90;
+  }
+
+  .btn-mark {
+    @apply bg-mark text-on-mark hover:brightness-95;
+  }
+
+  .btn-quiet {
+    @apply text-muted hover:bg-field hover:text-ink;
+  }
+
+  .btn-danger {
+    @apply bg-danger text-white hover:brightness-95;
+  }
+
+  .btn-icon {
+    @apply w-9 px-0;
+  }
+
+  .field {
+    @apply h-10 w-full rounded-lg border border-rule bg-surface px-3 text-[0.9375rem] text-ink placeholder:text-muted/80;
+  }
+
+  .field:focus-visible {
+    outline-offset: 0;
+    @apply border-ink;
+  }
+
+  .panel {
+    @apply rounded-[14px] bg-surface;
+  }
+
+  /* The highlighter stroke that marks the active project. */
+  .highlight {
+    background-image: linear-gradient(transparent 58%, var(--color-mark-line) 58%, var(--color-mark-line) 92%, transparent 92%);
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+
+  .toast {
+    animation: toast-in 160ms ease-out;
+  }
 }
 
-button {
-  font-family: inherit;
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
 }
 
-button:focus-visible,
-a:focus-visible {
-  outline: 3px solid #a5a0ff;
-  outline-offset: 3px;
-}
-
-::selection {
-  background: #e5e3ff;
-  color: #25204f;
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
