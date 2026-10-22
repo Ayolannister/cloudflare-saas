@@ -54,12 +54,60 @@ npm run lint
 npm run build
 ```
 
-## Deploying to Cloudflare Pages
+## Deploying
 
-1. Set the build command to `npm run build` and the output folder to `dist`, with `frontend` as the root directory.
-2. Add `VITE_CLERK_PUBLISHABLE_KEY` and `VITE_API_BASE_URL` (your Worker URL) as Pages environment variables.
-3. Set `FRONTEND_ORIGIN` in the root `wrangler.jsonc` to your Pages URL, then redeploy the Worker so CORS allows it.
-4. `public/_headers` adds security headers and long caching for hashed assets.
+The frontend is hosted on Vercel. The API stays on Cloudflare Workers, because it uses D1 and R2 directly.
+
+### 1. Deploy the API (once, and after API changes)
+
+From the repo root:
+
+1. Set the Clerk secret on the Worker:
+
+   ```
+   npx wrangler secret put CLERK_SECRET_KEY
+   ```
+
+2. Apply database migrations to the remote D1 database:
+
+   ```
+   npx wrangler d1 migrations apply cloudflare-saas-db --remote
+   ```
+
+3. Deploy:
+
+   ```
+   npx wrangler deploy
+   ```
+
+4. Note the Worker URL it prints (something like `https://cloudflare-saas2.<you>.workers.dev`).
+
+### 2. Deploy the frontend to Vercel
+
+1. In Vercel, choose Add New > Project and import `Ayolannister/cloudflare-saas`.
+2. Set Root Directory to `frontend`. Vercel reads the rest from `vercel.json`.
+3. Add environment variables:
+   - `VITE_CLERK_PUBLISHABLE_KEY`: your Clerk publishable key
+   - `VITE_API_BASE_URL`: the Worker URL from step 1.4
+4. Click Deploy and copy the production URL.
+
+### 3. Allow the Vercel URL to call the API
+
+1. In the root `wrangler.jsonc`, add the Vercel URL to `FRONTEND_ORIGIN`, comma-separated:
+
+   ```
+   "FRONTEND_ORIGIN": "https://your-app.vercel.app,http://localhost:5173"
+   ```
+
+2. Redeploy the Worker:
+
+   ```
+   npx wrangler deploy
+   ```
+
+3. If you use a Clerk production instance, add the Vercel domain in the Clerk dashboard. A development instance works on any domain.
+
+`vercel.json` sends every route to `index.html` so deep links like `/projects/3` load, adds security headers, and caches hashed assets for a year.
 
 ## Layout
 

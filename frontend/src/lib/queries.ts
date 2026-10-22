@@ -41,6 +41,28 @@ export function useCreateProject() {
   });
 }
 
+/** onDeleted runs from the hook itself, so it still fires after the project's page unmounts. */
+export function useDeleteProject(onDeleted?: (project: Project) => void) {
+  const api = useApi();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (project: Project) => {
+      await api.raw(`/projects/${project.id}`, { method: 'DELETE' });
+      return project;
+    },
+    onSuccess: (project) => {
+      const tasks = client.getQueryData<Task[]>(keys.tasks(project.id)) ?? [];
+      for (const task of tasks) client.removeQueries({ queryKey: keys.attachments(task.id) });
+      client.removeQueries({ queryKey: keys.tasks(project.id) });
+      client.setQueryData<Project[]>(keys.projects, (current = []) =>
+        current.filter((existing) => existing.id !== project.id),
+      );
+      toast(`Deleted ${project.name}. Its files are still in Files.`);
+      onDeleted?.(project);
+    },
+  });
+}
+
 /* Tasks */
 
 function tasksQuery(api: ReturnType<typeof useApi>, projectId: number) {

@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
+import { ConfirmButton } from '../components/ConfirmButton';
 import { EmptyState, InlineError } from '../components/Status';
 import { AddTaskForm } from '../features/tasks/AddTaskForm';
 import { TaskRow } from '../features/tasks/TaskRow';
-import { isDone } from '../lib/api';
+import { isDone, type Project } from '../lib/api';
 import { formatDate, plural } from '../lib/format';
-import { useAttachmentsFor, useProjects, useTasks } from '../lib/queries';
+import { useAttachmentsFor, useDeleteProject, useProjects, useTasks } from '../lib/queries';
 import { usePrefs } from '../stores/ui';
 
 export function ProjectPage() {
@@ -30,18 +31,14 @@ export function ProjectPage() {
 
   if (!project) return <p className="text-sm text-muted">Loading project</p>;
 
-  return <ProjectView key={project.id} projectId={project.id} name={project.name} description={project.description} createdAt={project.created_at} />;
+  return <ProjectView key={project.id} project={project} />;
 }
 
-interface ProjectViewProps {
-  projectId: number;
-  name: string;
-  description: string | null;
-  createdAt: string;
-}
-
-function ProjectView({ projectId, name, description, createdAt }: ProjectViewProps) {
+function ProjectView({ project }: { project: Project }) {
+  const { id: projectId, name, description, created_at: createdAt } = project;
   const tasks = useTasks(projectId);
+  const navigate = useNavigate();
+  const deleteProject = useDeleteProject(() => navigate('/projects', { replace: true }));
   const hideCompleted = usePrefs((state) => state.hideCompleted);
   const setHideCompleted = usePrefs((state) => state.setHideCompleted);
 
@@ -56,7 +53,17 @@ function ProjectView({ projectId, name, description, createdAt }: ProjectViewPro
   return (
     <article className="flex flex-col gap-6">
       <header className="flex flex-col gap-3">
-        <h1 className="text-[2rem] leading-[1.1] font-[750] tracking-[-0.025em] break-words sm:text-[2.5rem]">{name}</h1>
+        <div className="flex items-start justify-between gap-4">
+          <h1 className="min-w-0 text-[2rem] leading-[1.1] font-[750] tracking-[-0.025em] break-words sm:text-[2.5rem]">{name}</h1>
+          <div className="mt-1 shrink-0 sm:mt-2">
+            <ConfirmButton
+              label={`Delete project ${name}`}
+              confirmLabel={all.length === 0 ? 'Delete project' : `Delete project and ${plural(all.length, 'task')}`}
+              busy={deleteProject.isPending}
+              onConfirm={() => deleteProject.mutate(project)}
+            />
+          </div>
+        </div>
         {description && <p className="max-w-[62ch] text-[0.9375rem] leading-relaxed text-muted">{description}</p>}
         <div className="mt-1 flex flex-col gap-2">
           <div

@@ -45,11 +45,15 @@ function json(data: unknown, status = 200, headers: HeadersInit = {}): Response 
   });
 }
 
+// FRONTEND_ORIGIN accepts a comma-separated list, e.g. "https://app.vercel.app,http://localhost:5173".
 function corsHeaders(request: Request, env: Bindings): HeadersInit {
   const origin = request.headers.get("Origin");
-  const allowedOrigin = env.FRONTEND_ORIGIN || "http://localhost:5173";
+  const allowedOrigins = (env.FRONTEND_ORIGIN || "http://localhost:5173")
+    .split(",")
+    .map((value) => value.trim().replace(/\/+$/, ""))
+    .filter(Boolean);
   return {
-    "Access-Control-Allow-Origin": origin === allowedOrigin ? origin : allowedOrigin,
+    "Access-Control-Allow-Origin": origin && allowedOrigins.includes(origin) ? origin : allowedOrigins[0],
     "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Authorization, Content-Type",
     "Access-Control-Max-Age": "86400",
@@ -137,6 +141,28 @@ export default {
           "INSERT INTO projects (name, description, clerk_user_id) VALUES (?, ?, ?) RETURNING id, name, description, clerk_user_id, created_at"
         ).bind(name, description, userId).first<Project>();
         return json({ project: result }, 201, cors);
+      }
+
+      // PROJECTS: delete a project with its tasks and their attachment links.
+      // Stored files are kept; they belong to the user, not the project.
+      const projectMatch = path.match(/^\/projects\/(\d+)$/);
+      if (projectMatch && method === "DELETE") {
+        const projectId = parsePositiveId(projectMatch[1]);
+        if (!projectId) return json({ error: "Invalid project ID." }, 400, cors);
+        const project = await env.DB.prepare(
+          "SELECT id FROM projects WHERE id = ? AND clerk_user_id = ?"
+        ).bind(projectId, userId).first<{ id: number }>();
+        if (!project) return json({ error: "Project not found." }, 404, cors);
+
+        // D1 runs a batch as one transaction, so a failure leaves nothing half-deleted.
+        await env.DB.batch([
+          env.DB.prepare(
+            "DELETE FROM task_attachments WHERE clerk_user_id = ? AND task_id IN (SELECT id FROM tasks WHERE project_id = ?)"
+          ).bind(userId, projectId),
+          env.DB.prepare("DELETE FROM tasks WHERE project_id = ?").bind(projectId),
+          env.DB.prepare("DELETE FROM projects WHERE id = ? AND clerk_user_id = ?").bind(projectId, userId),
+        ]);
+        return json({ success: true }, 200, cors);
       }
 
       // TASKS: list/create within a project
